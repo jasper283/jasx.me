@@ -1,0 +1,152 @@
+---
+title: 10分钟搞定Certbot申请免费SSL证书并自动更新
+date: '2024-12-19'
+tags: ['服务器', '配置教程']
+summary: 利用Certbot申请Let’s Encrypt颁发的免费SSL证书，并用定时任务实现自动更新证书，10分钟超快搞定！
+---
+
+## 背景
+
+之前一直从腾讯云申请免费SSL证书，后来有效期从1年缩短成3个月，每次都要重复申请、配置这个流程还是挺烦人的。今天终于抽空实现了certbot自动管理SSL证书，可谓是一劳永逸！
+
+[Let’s Encrypt](https://letsencrypt.org/)是一项通过自动化API提供免费SSL证书的服务。最受欢迎的Let’s Encrypt客户端是[EFF](https://www.eff.org/)的[Certbot](https://certbot.eff.org/)客户端。
+
+Certbot提供多种方式来验证您的域名、获取证书，并自动配置Apache和Nginx。在本教程中，我们不会讨论SSL配置的细节，但完成后您将拥有一个自动续期的有效证书。此外，您还将能够自动重载您的服务，以便使用续订后的证书。
+
+本教程基于：
+
+- Debian 10.2
+- Nginx
+
+## 1、SSH登录你的服务器
+
+首先你需要登录托管网站、API服务的服务器，并且拥有SUDO权限
+
+## 2、安装系统依赖
+
+执行以下命令安装依赖
+
+```
+sudo apt update
+sudo apt install python3 python3-venv libaugeas0 // Python 3.6 及以上版本（包括 venv 模块）
+```
+
+## 3、设置Python虚拟环境
+
+执行以下命令设置虚拟环境
+
+```
+sudo python3 -m venv /opt/certbot/
+sudo /opt/certbot/bin/pip install --upgrade pip
+```
+
+## 4、安装Certbot
+
+```
+sudo /opt/certbot/bin/pip install certbot certbot-nginx
+```
+
+## 5、准备Certbot命令
+
+给Certbot创建一个软链接
+
+```
+sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
+```
+
+## 6、开始运行Certbot
+
+Certbot提供两种设置方式：
+
+1. 获取证书并帮你管理Nginx配置
+2. 仅仅获取证书，Nginx配置由你自己设置
+
+既然都是为了方便，那当然是越自动越好，所以这里选择第第一种方式，执行以下命令
+
+```
+sudo certbot --nginx
+```
+
+然后按指引填写信息
+
+![Certbot设置](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/QQ_1734590124803.png)
+
+最重要的是填写一个联系邮箱，主要是接收一些证书相关的事务邮件，比如通知你证书快到期了
+
+![Certbot-Nginx配置](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/QQ_1734590437729.png)
+
+最后一步，Certbot似乎自动读取了我的Nginx配置，问我是否要给这三个域名申请证书。如果全部都要申请，直接回车就好；如果要指定申请哪些，用1,2这种格式指定，回车然后等待配置
+
+配置成功后到nginx配置文件看看
+
+![Certbot自动修改Nginx配置](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/QQ_1734591144242.png)
+
+可以发现Nginx配置文件已经被修改，SSL证书路径被指向了新路径
+
+## 7、测试
+
+重启Nginx，去浏览器输入URL，查看证书信息，可以看到已经替换为新的证书
+
+![SSL证书信息](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/QQ_1734591325687.png)
+
+## 8、自动更新
+
+此命令会在每月1号凌晨3点执行，正式执行之前还会随机等待0至3600s，这段代码是官方给出的，我猜测是避免过于集中在某一个整点时间去请求，所以我也保留了这段代码。
+
+```
+echo "0 0 3 1 * ? root /opt/certbot/bin/python -c 'import random; import time; time.sleep(random.random() * 3600)' && sudo certbot renew -q" | sudo tee -a /etc/crontab > /dev/null
+```
+
+查看是否设置成功
+
+```
+cat /etc/crontab
+```
+
+![设置crontab定时任务](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/QQ_1734593263243.png)
+
+可以看到任务已经被添加
+
+---
+
+至此，我们完成了所有的配置工作，Certbot会每个月帮你自动更新证书，替代了原来的手动操作。
+
+记得每隔一段时间检查下证书是否正常，不检查也OK，但是要注意查看是否有告警邮件
+
+## 扩展
+
+教程部分已完结，这里是一些扩展知识。
+
+本文用的`sudo certbot --nginx`命令是通过 Nginx 插件进行证书获取和配置的，属于一种自动化的插件模式。
+如果使用`sudo certbotonly`手动管理Nginx，则更为繁琐，它分为[webroot mode](https://eff-certbot.readthedocs.io/en/stable/using.html#webroot) 和 [standalone mode](https://eff-certbot.readthedocs.io/en/stable/using.html#standalone)
+
+### Webroot Mode
+
+- 工作原理 ：在 webroot 模式下，Certbot 将会在指定的 web 服务器根目录下创建一个临时文件。Let's Encrypt 会通过 HTTP 请求访问这个文件来验证您的域名所有权
+- 要求 ：您必须有一个正在运行的 web 服务器（如 Apache、Nginx 等），并且能够访问该服务器的文件系统
+- 优点 ：
+  适合已经在使用 web 服务器的情况。
+  不会中断现有的 web 服务。
+- 命令示例：
+
+```
+certbot certonly --webroot -w /var/www/html -d example.com
+```
+
+### Standalone Mode
+
+- 工作原理 ：在 standalone 模式下，Certbot 自己会启动一个临时的 web 服务器来处理 Let's Encrypt 的验证请求。
+- 要求 ：您不需要一个现有的 web 服务器，但您必须确保 Certbot 在运行时能够使用所需的端口（通常是 80 和 443）。
+- 优点 ：
+  适合没有现有 web 服务器的情况，或者在需要临时获取证书时。
+  简单直接，特别是在没有复杂的 web 服务器配置时。
+- 命令示例：
+
+```
+certbot certonly --standalone -d example.com
+```
+
+## 参考
+
+- [Certbot Instructions](https://certbot.eff.org/instructions?ws=nginx&os=pip&tab=standard)
+- [What do I need to restart after renewing a certificate?](https://community.letsencrypt.org/t/what-do-i-need-to-restart-after-renewing-a-certificate/186294)

@@ -7,20 +7,16 @@ interface Project {
 
 const projectsData: Project[] = [
   {
-    title: 'A Search Engine',
-    description: `What if you could look up any information in the world? Webpages, images, videos
-    and more. Google has many features to help you find exactly what you're looking
-    for.`,
-    imgSrc: '/static/images/google.png',
-    href: 'https://www.google.com',
+    title: 'Mini记账',
+    description: `一款简洁好用的记账App，iOS版本于 2020 年上线；Android版本 2024 年上线，功能正在迭代中。`,
+    imgSrc: '/static/images/minexp-screenshots.png',
+    href: 'https://miniexp.com',
   },
   {
-    title: 'The Time Machine',
-    description: `Imagine being able to travel back in time or to the future. Simple turn the knob
-    to the desired date and press "Go". No more worrying about lost keys or
-    forgotten headphones with this simple yet affordable solution.`,
-    imgSrc: '/static/images/time-machine.jpg',
-    href: '/blog/the-time-machine',
+    title: '小报童精选',
+    description: `一个小报童精选专栏导航站，收录了数百个优质专栏，支持按标签、关键词检索。持续更新中，欢迎查看`,
+    imgSrc: '/static/images/xiaobot.png',
+    href: 'https://paperboy.site',
   },
 ]
 

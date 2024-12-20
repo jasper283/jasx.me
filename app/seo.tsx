@@ -1,5 +1,5 @@
-import { Metadata } from 'next'
 import siteMetadata from '@/data/siteMetadata'
+import { Metadata } from 'next'
 
 interface PageSEOProps {
   title: string
@@ -19,7 +19,7 @@ export function genPageMetadata({ title, description, image, ...rest }: PageSEOP
       url: './',
       siteName: siteMetadata.title,
       images: image ? [image] : [siteMetadata.socialBanner],
-      locale: 'en_US',
+      locale: 'zh_CN',
       type: 'website',
     },
     twitter: {
