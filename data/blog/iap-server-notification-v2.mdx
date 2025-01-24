@@ -1,0 +1,328 @@
+---
+title: 服务端处理AppStore订阅通知 (V2)
+date: '2025-1-17'
+tags: ['开发笔记', 'Flutter', 'Nodejs']
+summary: 使用Apple官方的 Nodejs SDK 去处理订阅通知，完整流程分享
+---
+
+## 背景
+
+早在2020年开始写App时，需要实现内购功能，当时我并不知道有 [RevenueCat](https://www.revenuecat.com/) 这种服务。于是花了大功夫自己实现。
+
+最近在写一个新App，安卓端已经由微信支付实现，iOS端并不适合再使用 RevenueCat，再加上最近被墙事件，还是得自己实现。
+
+本来想直接参考之前的代码，发现苹果 webhook v1版本已经废弃，全面启用v2，花了两天时间总算调通，总的来说体验比v1版本好，这里简单记录下
+
+## 客户端发起内购
+
+使用Flutter官方的内购库 [in_app_purchase](https://pub.dev/packages/in_app_purchase)
+
+它本身是封装了iOS的StoreKit，但是默认是v1实现，我们需要显示将其切为v2
+
+```
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+void main() {
+  ...
+
+  WidgetsFlutterBinding.ensureInitialized();
+  InAppPurchaseStoreKitPlatform.enableStoreKit2();
+  ...
+
+  runApp(_MyApp());
+}
+
+```
+
+封装一个单例，方便管理内购
+
+```
+
+class IAPManager {
+  static final IAPManager instance = IAPManager._internal();
+
+  final InAppPurchase _iap = InAppPurchase.instance;
+  StreamSubscription<List<PurchaseDetails>>? _subscription;
+  List<ProductDetails> _products = [];
+
+  List<ProductDetails> get products => _products;
+
+  // 购买结果回调
+  final _callbacks = <PurchaseResultCallback>[];
+
+  IAPManager._internal() {
+    _initPurchaseStream();
+  }
+
+  ..
+
+  // 获取商品
+    Future<List<ProductDetails>> loadProducts(List<String> productIds) async {
+    try {
+      final response = await _iap.queryProductDetails(productIds.toSet());
+      _products = response.productDetails;
+
+      if (response.notFoundIDs.isNotEmpty) {
+        $logger.w('Products not found: ${response.notFoundIDs}');
+      }
+
+      return response.productDetails;
+    } catch (e) {
+      $logger.e('Failed to load products: $e');
+      return [];
+    }
+  }
+
+  // 购买
+  Future<void> buyProduct(ProductDetails product) async {
+    try {
+      final purchaseParam = PurchaseParam(productDetails: product);
+      await _iap.buyNonConsumable(purchaseParam: purchaseParam);
+    } on PlatformException catch (e) {
+      _notifyResult(false, null, e.message ?? e.toString(),
+          e.code == 'storekit2_purchase_cancelled');
+    } catch (e) {
+      _notifyResult(false, null, e.toString(), false);
+    }
+  }
+
+  ..
+}
+```
+
+获取商品，然后购买，因为我是订阅商品，所以调用`buyNonConsumable`，非消耗商品和订阅商品都是使用这个方法
+
+然后处理购买结果
+
+```
+Future<void> _handlePurchaseUpdate(PurchaseDetails purchase) async {
+    switch (purchase.status) {
+      case PurchaseStatus.pending:
+        $logger.i('购买中...');
+        break;
+      case PurchaseStatus.error:
+        $logger.e('购买错误: ${purchase.error}');
+        _notifyResult(
+          false,
+          purchase,
+          purchase.error?.message ?? '购买失败',
+          false,
+        );
+        for (var callback in _pendingCallbacks) {
+          callback(false);
+        }
+        break;
+      case PurchaseStatus.purchased:
+        if (await _verifyPurchase(purchase)) {
+          await _iap.completePurchase(purchase);
+          _notifyResult(true, purchase, null, false);
+        } else {
+          _notifyResult(false, purchase, '购买验证失败', false);
+        }
+        break;
+      case PurchaseStatus.restored:
+        if (await _restorePurchase(purchase)) {
+          await _iap.completePurchase(purchase);
+          _notifyResult(true, purchase, null, false);
+        } else {
+          _notifyResult(false, purchase, '恢复购买失败', false);
+        }
+        break;
+      case PurchaseStatus.canceled:
+        _notifyResult(false, purchase, '购买已取消', false);
+        break;
+    }
+
+    if (purchase.pendingCompletePurchase) {
+      _iap.completePurchase(purchase);
+    }
+  }
+
+```
+
+主要关注`purchased`和`restored`这两种状态，这时会返回一个加密的凭证，用这个凭证去调用苹果的接口，返回具体的购买信息
+
+```
+Future<bool> _verifyPurchase(PurchaseDetails purchase) async {
+    if (purchase.verificationData.serverVerificationData.isEmpty) {
+      $logger.w('验证数据为空');
+      return false;
+    }
+
+    try {
+      final (success, message) = await PayAPI.verifyReceipt(
+        receiptData: purchase.verificationData.serverVerificationData,
+        pid: purchase.productID,
+      );
+
+      if (!success && message != null) {
+        $logger.e('购买验证失败: $message');
+      }
+
+      if (success) {
+        await UserService.to.fetchVipInfo();
+      }
+
+      return success;
+    } catch (e) {
+      $logger.e('验证过程发生错误: $e');
+      return false;
+    }
+  }
+```
+
+当`_verifyPurchase`返回true，说明校验成功，这时需要调用`_iap.completePurchase(purchase);`，这样才能结束整个购买流程。如果没调用，苹果会认为这笔交易未结束，下次App启动依然会提醒你这笔订单需要处理。
+
+如果你一启动App就监听，会再次跑到 PurchaseStatus.purchased 这个case
+
+## 服务端处理
+
+如果你的后端使用Node.js, Python, Swift or Java，可以直接使用苹果官方提供的库，我是Nodejs写的服务，所以直接用[app-store-server-library-node
+](https://github.com/apple/app-store-server-library-node)，其他语言版本也可以在Github找到。
+
+### 准备工作
+
+初始化这个SDK，需要用到一些key和文件，注释已经写的非常清楚
+
+```
+/**
+* Create an App Store Server API client
+* @param signingKey Your private key downloaded from App Store Connect
+* @param keyId Your private key ID from App Store Connect
+* @param issuerId Your issuer ID from the Keys page in App Store Connect
+* @param bundleId Your app’s bundle ID
+* @param environment The environment to target
+*/
+constructor(signingKey: string, keyId: string, issuerId: string, bundleId: string, environment: Environment);
+```
+
+![App Store Connect](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/20250117173633.png)
+
+signingKey 就是截图中生成的秘钥（server-notification-v2-node），生成后只能下载一次，所以图没有看到下载按钮，它跟keyId是配对使用的。其他参数就不必多说啦，一目了然。
+
+```
+// 初始化 API 客户端
+const issuerId = '***'
+const keyId = '***'
+const bundleId = '***'
+const privateKeyPath = './files/server-notification-v2-node.p8'
+
+// 读取私钥
+const encodedKey = require('fs').readFileSync(privateKeyPath);
+
+// 初始化沙盒环境客户端
+    this.sandboxClient = new AppStoreServerAPIClient(
+      encodedKey,
+      keyId,
+      issuerId,
+      bundleId,
+      Environment.SANDBOX
+    );
+
+```
+
+### 验证购买接口
+
+就是上面Flutter客户端提到的`PayAPI.verifyReceipt`接口，参数：
+
+- receiptData：客户端获取到的加密凭证
+- pid: productId，代表你购买了哪个商品
+
+```
+async function verifyReceiptV2(ctx, isSandbox) {
+  const { receiptData, pid } = ctx.request.body;
+  const { uid } = ctx;
+
+  /**
+ * 存在这种情况，当Callback已经处理过此续订，在App启动时依然有transcation会发起请求
+ * 此时直接返回success，让App finishTranscation.
+ */
+  const order = await AppleOrder.findOne({
+    where: {
+      userId: uid,
+      transactionId: tid,
+      productId: pid
+    }
+  })
+
+  // 有订单说明已经处理过，直接返回
+  if (order) {
+    return {
+      success: true
+    }
+  }
+
+  const transactions = await verifyAndDecodeReceipt({ data: receiptData, pid: pid, isSandbox: isSandbox })
+
+  if (transactions.length <= 0) {
+    throw new APIError('error', 'Invalid receipt')
+  }
+
+  // 第一条是最新的购买信息
+  const item = transactions[0]
+
+  const t = await sequelize.transaction();
+  try {
+    await saveOrderV2({
+      item: item,
+      env: item.environment,
+      uid: uid,
+      receipt: receiptData,
+      t: t,
+      status: 'create'
+    })
+    const vipInfo = await updateUserVipInfoV2({ item, uid, t })
+
+    await t.commit();
+
+    return {
+      success: true,
+      vipInfo: vipInfo
+    }
+  } catch (err) {
+
+    await t.rollback();
+    throw err
+  }
+}
+
+const { AppStoreServerAPIClient, Environment, SignedDataVerifier, ReceiptUtility, GetTransactionHistoryVersion, Order, } = require("@apple/app-store-server-library");
+
+// 解析数据
+async function verifyAndDecodeReceipt({ data, pid, isSandbox }) {
+  const receiptUtil = new ReceiptUtility()
+  const transactionId = receiptUtil.extractTransactionIdFromAppReceipt(data);
+  if (transactionId != null) {
+    const transactionHistoryRequest = {
+      sort: Order.DESCENDING,
+      productIds: [pid], // 只查当前购买商品的历史信息
+    }
+    let transactions = []
+    let response = null
+    const revisionToken = response?.revision ?? null
+    response = await subscriptionHandler.getTransactionHistory(transactionId, revisionToken, transactionHistoryRequest, GetTransactionHistoryVersion.V2, isSandbox ? Environment.SANDBOX : Environment.PRODUCTION)
+    if (response.signedTransactions) {
+      transactions = transactions.concat(response.signedTransactions)
+
+      // 解析每个签名交易
+      const decodedTransactions = await Promise.all(
+        transactions.map(async (signedTransaction) => {
+          try {
+            return await subscriptionHandler.verifyAndDecodeTransaction(
+              signedTransaction,
+              isSandbox ? Environment.SANDBOX : Environment.PRODUCTION
+            );
+          } catch (error) {
+            console.error('解析交易失败:', error);
+            return null;
+          }
+        })
+      );
+
+      // 过滤掉解析失败的交易
+      return decodedTransactions.filter(transaction => transaction !== null);
+    }
+    return [];
+  }
+}
+
+```

@@ -1,0 +1,18 @@
+## 发现问题
+
+最近在写账单图片功能，用的是腾讯云的COS对象存储，之前做用户头像设置时已经封装好了工具类，直接用就好。
+写完代码开始测试，一开始没什么问题，多测几次发现会报：`403 Access Denied.`
+
+## 排查原因
+
+我的第一反应是不是操作COS的临时密钥过期，我检查了返回token的接口，发现秘钥有效期是1天，我卸载了重新安装App，因为这样能保证秘钥是重新获取的，肯定在有效期内。但是依然失败
+
+在这个尝试的过程中，我发现偶尔能上传成功，偶尔失败（后面有合理的解释），于是我开始在Google寻找答案
+
+我找到一个腾讯云提供的[自助诊断工具](https://console.cloud.tencent.com/cos/diagnose)
+
+![COS](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/20250115100736.png)
+
+我们可以将报错的RequestID贴进去，它就会给我们返回错误的原因
+
+https://console.cloud.tencent.com/cos/diagnose
