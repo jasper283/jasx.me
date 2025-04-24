@@ -1,0 +1,70 @@
+---
+title: 2025年Mac装机必备软件（开发向）
+date: '2025-4-23'
+tags: ['Mac', '软件推荐']
+summary: 一台全新的macOS设备，从拿到手到可以舒服地进行日常开发工作，需要安全哪些软件？分享一些必备的好用软件
+---
+
+不知不觉做开发快10年了，最近刚购入了第三台Macbook，之前那台M1已经服役4年，处于够用但是偶尔会卡顿的情况。公司一直都有办公电脑补贴，作为吃饭的工具，升级设备好像没有什么好犹豫的。
+
+本来想买台普通的M4，在得知同事的是M1 Max，当时买下来花了3W。我也是不能忍，对自己好点入手了M4 Pro，其他还是基础配置24GB+512GB。拿到电脑并没有使用数据迁移功能，旧电脑的数据全部备份过来就没有了新电脑的感觉，所以我选择从0开始安装各种软件。事不宜迟，马上开整！
+
+## Xcode
+
+开发必备，没啥好说的。下载最新版本还得升级macOS，害。。
+
+## [iTerm2](https://iterm2.com/) + [Oh My Zsh](https://ohmyz.sh/)
+
+![iTerm2](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/20250423112723.png)
+
+![On My Zsh](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/20250423115255.png)
+
+iTerm2是系统终端的替代软件，On My Zsh 是 zsh 的扩展，新版本的macOS默认shell都是zsh了，这两玩意适合单独开一篇去讲，简言之就是为了让终端更好用和好看
+
+iTerm2 直接去[官网](https://iterm2.com/)下载
+
+Oh My Zsh 用脚本安装：
+
+```
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+```
+
+## [Homebrew](https://brew.sh/zh-cn/)
+
+Homebrew是macOS（及Linux）上的开源包管理工具，核心作用是简化软件的安装、更新和管理，被誉为“macOS缺失的软件包管理器”，
+
+其作用是使用命令行快速安装各种软件，自动处理依赖关系。
+
+安装命令：
+
+```
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+装完将可运行路径添加到系统环境变量中，按官方的指引运行这几段命令即可
+
+![20250423145447](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/20250423145447.png)
+
+## [OpenInTerminal](https://github.com/Ji4n1ng/OpenInTerminal)
+
+这是一个Finder扩展应用，用图形界面的方式，让你可以快速在终端打开某个目录，非常方便的一个小工具。
+因为我需要的仅仅是这一个功能，所以安装Lite版本，完整版本有更多功能，有兴趣的可以去看看
+
+使用brew安装
+
+```
+brew install --cask openinterminal-Lite
+```
+
+## [VSCode](https://code.visualstudio.com/)
+
+神器，不过多解释。除了iOS之后的项目，都是用这个IDE，还有一些很好用的扩展，有时间再单独写一篇。
+顺便一提，VSCode是有账号系统的，打开同步功能，可以在新设备快速同步Extensions和主题
+
+## [Cursor](https://www.cursor.com/)
+
+这玩意用习惯后，已经回不去了，个人项目80%都是由AI写的。撸一些小工具非常方便！
+
+---
+
+未完待续..
