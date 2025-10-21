@@ -1,0 +1,91 @@
+---
+title: 1700+ Emoji 怎么找？我花 2 天做了个搜索站 (已开源)
+date: '2025-10-20'
+tags: ['Nextjs', 'Web App']
+summary: 借助 AI 两天搭建 Emoji 搜索网站，支持 1700+ 表情查找、多平台风格对比，分享 Next.js 零成本开发部署全流程
+---
+
+![emojidir.com](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/emojidir.com.png)
+
+[传送门](https://emojidir.com)
+
+## 为什么开发这个网站？
+
+最近在小红书刷到一款App，设计精美，尤其是里面的分类icon吸引了我的注意力。
+
+![768c3f850c733519b66304c19553a700](https://img-1254434880.cos.ap-shanghai.myqcloud.com/picgo/768c3f850c733519b66304c19553a700.jpg)
+
+经过一番了解，我发现这些精美的icon来自微软开源的emoji表情库。微软在原有emoji的基础上，将其设计成了3D风格，非常精美可爱，让我萌生了在下一款App中使用它们的想法。
+
+然而问题来了：目前这个emoji库有1700+个表情，如何快速找到我想要的呢？比如我想找一个代表"设置"的icon。在查阅资料时我发现，unicode官方的[emoji数据](https://unicode.org/emoji/charts/emoji-list.html)为每个emoji都提供了名称和关键词，这样就可以通过搜索功能快速定位。但这个列表仅包含unicode标准emoji，并不能与微软的Fluent Emoji一一对应。
+
+既然json数据有了，3D图片资源也有了，现在AI编程又如此强大，为什么不快速搭建一个emoji集合站呢？
+
+## 框架
+
+技术选型方面，我直接选择了最主流的 Next.js + Vercel 部署方案，省事又免费（低流量情况下）。考虑到有大量的图片资源，为避免Vercel产生过高流量费用，我选择了CloudFlare R2作为图片存储方案。虽然具体的免费额度我不太清楚，但我有信心这个小站的访问量不会超出免费额度。
+
+## 开干
+
+首先从Github下载微软的[Emoji资源](https://github.com/microsoft/fluentui-emoji)，将assets文件夹拖入项目后，让AI分析并生成emoji-index.json文件：
+
+```
+  {
+      "id": "1st-place-medal",
+      "name": "1st place medal",
+      "glyph": "🥇",
+      "group": "Activities",
+      "keywords": [
+        "1st place medal",
+        "first",
+        "gold",
+        "medal"
+      ],
+      "unicode": "1f947",
+      "tts": "1st place medal",
+      "styles": {
+        "3d": "assets/1st-place-medal/3d/1st_place_medal_3d.png",
+        "color": "assets/1st-place-medal/color/1st_place_medal_color.svg",
+        "flat": "assets/1st-place-medal/flat/1st_place_medal_flat.svg",
+        "high-contrast": "assets/1st-place-medal/high-contrast/1st_place_medal_high_contrast.svg"
+      }
+  },
+  ...
+```
+
+接下来让AI根据这个json文件实现预览功能，通过`group`字段进行分类筛选，通过`name`和`keywords`实现搜索功能。
+
+然后需要将assets中的资源文件批量上传到CloudFlare的R2存储中。一开始AI建议直接在CloudFlare后台将整个目录拖进去上传，结果发现一次最多只能上传100个文件，超过限制就必须使用API。最后在AI的帮助下，我使用aws-cli命令完成了批量上传。
+
+总之，只要有明确的需求和技术方案，AI基本都能帮你实现。详细的开发过程这里不再赘述，项目已经开源，感兴趣的话可以[去看看](https://github.com/jasper283/www.emojidir.com)
+
+## 优化
+
+网站面向全球用户，国际化功能必不可少。好在有AI的帮助，多语言支持很快就实现了。
+
+只展示Fluent Emoji显得有些单一，为了让网站内容更丰富，我又加入了 Noto Emoji（由谷歌设计）和Apple Emoji（需要在苹果设备上查看）。
+
+## 部署
+
+将项目推送到Github后，登录Vercel并授权关联仓库，之后每次提交代码都会自动触发构建部署。
+
+计划长期运营这个站点，学习一些SEO知识，那就需要一个好域名。经过一番琢磨，我发现跟emoji相关的好域名基本都被注册了。最后敲定了 `emojidir.com`，取意为Emoji Directory（Emoji目录）。
+
+## 后续规划
+
+这个项目才刚刚开始，未来我计划：
+
+- **丰富 Emoji 内容**：持续更新最新的 Emoji，添加使用场景和组合建议
+- **优化搜索体验**：支持模糊搜索、智能推荐和相似 Emoji 查找
+- **增加互动功能**：用户收藏、一键复制、分享等功能
+- **打造 Emoji 百科**：为每个 Emoji 添加详细的释义和文化背景
+
+## 关于 SEO 和长期运营
+
+从 0 开始做 SEO 是个有趣的实验。哥飞说过："做一个网站养老"，这个理念深深打动了我。
+
+投入一个域名的成本（每年约 10 美元），借助免费的开源工具和平台，就能搭建一个长期运营的网站。即使每天只有几十个访问量，假以时日也可能产生意想不到的价值。
+
+更重要的是，**这个过程本身就很有意思** —— 从 0 到 1 创造一个产品，学习新技术，优化用户体验，观察数据增长。这比最终结果更有价值。
+
+如果你也有一个想法，不妨试试看。毕竟，成本只是一个域名而已。🚀
