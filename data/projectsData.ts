@@ -13,10 +13,9 @@ const projectsData: Project[] = [
     href: 'https://miniexp.com',
   },
   {
-    title: '小报童精选',
-    description: `一个小报童精选专栏导航站，收录了数百个优质专栏，支持按标签、关键词检索。持续更新中，欢迎查看`,
-    imgSrc: '/static/images/xiaobot.png',
-    href: 'https://paperboy.site',
+    title: 'EmojiDir',
+    description: `一个 Emoji 搜索网站，支持 1700+ 表情查找、多平台风格对比和关键词检索，方便快速找到适合项目使用的 Emoji 图标。`,
+    href: 'https://emojidir.com',
   },
 ]
 
