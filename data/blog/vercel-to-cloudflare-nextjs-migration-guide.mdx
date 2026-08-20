@@ -1,0 +1,62 @@
+---
+title: 逃离 Vercel，全面拥抱 Cloudflare
+date: '2026-08-20'
+tags: ['CloudFlare', 'Nextjs', 'Web App']
+summary: 将网站从 Vercel 无痛迁移到 Cloudflare 的全流程记录
+---
+
+## 起因
+
+去年我做了个站 [EmojiDir](https://emojidir.com)。上站以后折腾过一阵 SEO，一开始流量还可以。后来不知道哪一步做坏了，Google 搜索流量突然掉下去，几乎到 0。我让 AI 改过几版，也没什么起色，后面就搁置了。
+
+最近偶然刷到一篇文章，说新站刚上线不要只盯着 [GSC](https://search.google.com/search-console/about)，Google 的流量来得会慢一些，可以先看 Bing。我被这句话勾了一下，就去瞄了一眼。
+
+没想到，Bing 搜索流量还可以，起码比 Google 好多了。
+
+![bing-emojidir](https://objects.jasx.me/2026/08/9afb391074b45bcfd927ac0343e7f9ed.jpeg)
+
+趁这个窗口，我又把网站改了一轮，主要是把详情页补丰富。没多久我就收到了 Vercel 的预警邮件。这个站没有任何收入，我也就没太在意。
+
+大概过了两周，我再打开网站，发现已经挂了。
+
+![网站挂了](https://objects.jasx.me/2026/08/0f6395e6621d93bb15dfb4d0ab98b646.jpeg)
+
+到 Vercel 后台一看，用量已经超出 Free plan，服务被直接停掉。
+
+![image](https://objects.jasx.me/2026/08/1ac02e9c5517937e9dcdb5bd70f09aa0.png)
+
+## 迁移到 Cloudflare
+
+不想付费，就只能另寻部署方案。首先想到的当然是赛博佛祖 Cloudflare。最初收到 Vercel 预警时，我就试过迁到 Cloudflare，Cloudflare Workers + OpenNext 理论上可以接住我当时依赖 Vercel 的那些能力。
+
+最终放弃，是因为当时卡在 Workers 的打包大小限制上。我那边看到的上限是 5 MB，而项目打包接近 20 MB。当时我又在外地，就先放下了。
+
+这次网站直接挂了，就没法再拖。我让 Codex 重新评估了一遍，它给出的方案很直接，砍掉动态能力，改成静态站。项目之前用到了 SSR 和下载路由，不过这两块可以用静态页面绕过去。EmojiDir 大概有 9000 多个页面，少于 Cloudflare Pages 的 20000 文件限制，按这个方向改造是可行的。
+
+剩下的活就直接交给 AI。改造好后，我把它部署到 Cloudflare，配置 DNS，测试没什么问题，再去 Vercel 删除相关内容。
+
+另外，本博客之前也是部署到 Vercel，这次也一起迁到了 Cloudflare。
+
+## 复盘
+
+写这篇文章时，我想搞懂为什么会撞到 Vercel 的用量上限。Codex 后来帮我归纳成这一句。
+
+> 旧版代码把一个长尾 URL 极多的 emoji 站部署成了可按需生成的动态 Next 站，爬虫、分页、平台变体和下载代理一起把 Vercel 的 ISR 与函数用量打爆了
+
+再加上我用了 Bing 的 IndexNow 功能，爬虫在短时间内抓了很多页面，用量很快就冲到了上限。
+
+这样看，如果一开始就改成纯静态，EmojiDir 其实还能继续跑在 Vercel 上。现在已经迁完了，我也就不再倒回去了。
+
+毕竟 Cloudflare 比 Vercel 慷慨多了。这里贴一下对比表格，由 Codex 总结，仅供参考。
+
+| 项目          | Vercel Hobby                                                                             | Cloudflare Pages Free                               |
+| ------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 静态请求数    | Edge Requests 最多 **1,000,000/月**                                                      | Pages 静态资源未按请求数列硬上限                    |
+| 静态流量      | Fast Data Transfer **100 GB/月**                                                         | Pages 文档未列静态带宽月度硬上限                    |
+| 源站/函数流量 | Fast Origin Transfer **10 GB/月**                                                        | 纯静态 Pages 不走 Functions                         |
+| 函数请求      | **1,000,000/月**                                                                         | Pages Functions 按 Workers Free 额度 **100,000/天** |
+| ISR           | 有 ISR Reads/Writes 计量                                                                 | Pages 静态站无 ISR                                  |
+| 构建          | **100 deployments/day**，单次构建 **45 分钟**                                            | **500 builds/month**，单次构建 **20 分钟**          |
+| 文件数/大小   | CLI 源文件上传 Hobby **100 MB**；源文件数 **15,000**；构建输出无明确上限但受构建时长影响 | Free 每站 **20,000 files**，单文件 **25 MiB**       |
+| 项目数        | **200 projects**                                                                         | **100 projects**                                    |
+| 自定义域名    | **50/project**                                                                           | **100/project**                                     |
